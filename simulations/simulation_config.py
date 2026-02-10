@@ -6,7 +6,7 @@ from typing import Literal
 
 # Add parent directory to path to import from project root
 sys.path.insert(0, str(Path(__file__).parent.parent))
-from config import DEFAULT_MODEL
+from config import DEFAULT_MODEL, DEFAULT_DEPLOYMENT_URL
 
 # Simulation Parameters
 DEFAULT_CONVERSATIONS_PER_RUN = 7  # 5-10 range, default to middle
@@ -16,8 +16,8 @@ SIMULATION_MODEL = DEFAULT_MODEL  # Use same model as rest of project
 # Deployment Settings
 DEPLOYMENT_GRAPH_NAME = "supervisor_hitl_sql_agent"
 
-# Default deployment URL (can be overridden via --url CLI arg)
-DEFAULT_DEPLOYMENT_URL = "https://langsmith-agent-lifecycle-w-564445430b575a46895dfccb4b48bd26.us.langgraph.app"
+# Deployment URL from config (can be overridden via --url CLI arg)
+# Set LANGRAPH_DEPLOYMENT_URL in .env to configure
 
 # Scenario Selection Strategy
 SCENARIO_SELECTION: Literal["random", "round_robin", "all"] = "random"
