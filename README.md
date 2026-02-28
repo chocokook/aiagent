@@ -46,6 +46,18 @@ uv run python data/data_generation/build_vectorstore.py
 uv run jupyter lab
 ```
 
+### Embedding Configuration (Optional)
+
+By default, the vectorstore uses **HuggingFace embeddings** (local model, no API key required). If you're in an environment where downloading models from HuggingFace is restricted, you can use **OpenAI embeddings** instead:
+
+```bash
+# Add to your .env file:
+EMBEDDING_PROVIDER=openai
+
+# Rebuild the vectorstore with OpenAI embeddings
+uv run python data/data_generation/build_vectorstore.py
+```
+
 ## Workshop Outline
 
 This workshop consists of three modules that take you from manual tool calling to production deployment:

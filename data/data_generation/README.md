@@ -32,13 +32,26 @@ python data/data_generation/create_database.py
 # 5. Validate
 python data/data_generation/validate_database.py
 
-# 6. Build vectorstore (requires: pip install langchain-huggingface sentence-transformers)
+# 6. Build vectorstore
+# Default: HuggingFace embeddings (local, no API key)
 python data/data_generation/build_vectorstore.py
+
+# Optional: Use OpenAI embeddings instead (requires OPENAI_API_KEY in .env)
+# EMBEDDING_PROVIDER=openai python data/data_generation/build_vectorstore.py
 ```
 
 **Total time:** ~5 minutes
 
 **Note:** Products are manually defined in `data/structured/products.json` (edit directly to modify).
+
+### Embedding Provider Options
+
+The vectorstore supports two embedding providers:
+
+- **HuggingFace (default)**: Local model, no API key required, 2.5 MB file
+- **OpenAI**: Requires `OPENAI_API_KEY`, 4.7 MB file, works in restricted environments
+
+Configure via `EMBEDDING_PROVIDER` in `.env` (defaults to `huggingface`).
 
 ## Generation Scripts
 
@@ -49,7 +62,7 @@ python data/data_generation/build_vectorstore.py
 | `generate_order_items.py` | `order_items.json` | ~440 items with product affinity |
 | `create_database.py` | `techhub.db` | SQLite database with schema |
 | `validate_database.py` | Validation report | Data quality checks |
-| `build_vectorstore.py` | `techhub_vectorstore.pkl` | RAG embeddings |
+| `build_vectorstore.py` | `techhub_vectorstore_{provider}.pkl` | RAG embeddings (HuggingFace or OpenAI) |
 
 ## Key Features
 
