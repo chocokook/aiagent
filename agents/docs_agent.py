@@ -9,7 +9,7 @@ from langchain.chat_models import init_chat_model
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import MessagesState
 
-from config import DEFAULT_MODEL
+from config import DEFAULT_MODEL, Context
 from tools import search_policy_docs, search_product_docs
 
 # ============================================================================
@@ -78,7 +78,7 @@ def create_docs_agent(
         ... )
     """
     # Use provided values or fall back to module defaults
-    llm = init_chat_model(model or DEFAULT_MODEL)
+    llm = init_chat_model(model or DEFAULT_MODEL, configurable_fields=["model"])
     prompt = system_prompt or DOCS_AGENT_SYSTEM_PROMPT
     tools = DOCS_AGENT_BASE_TOOLS.copy()
 
@@ -89,6 +89,7 @@ def create_docs_agent(
         "name": "docs_agent",
         "system_prompt": prompt,
         "state_schema": state_schema or MessagesState,
+        "context_schema": Context,
     }
 
     # Add checkpointer for development (platform handles it for deployment)

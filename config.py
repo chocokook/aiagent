@@ -9,7 +9,9 @@ This makes it easy to adapt the workshop for different:
 """
 
 import os
+from dataclasses import dataclass
 from pathlib import Path
+from typing import Literal
 
 # ============================================================================
 # MODEL CONFIGURATION
@@ -20,9 +22,33 @@ from pathlib import Path
 # Examples:
 #   - "anthropic:claude-haiku-4-5" (fast, cost-effective)
 #   - "anthropic:claude-sonnet-4" (balanced)
-#   - "openai:gpt-4o-mini" (fast, OpenAI)
-#   - "openai:gpt-4o" (high-quality, OpenAI)
+#   - "openai:gpt-5-mini" (fast, OpenAI)
+#   - "openai:gpt-5-nano" (lightweight, OpenAI)
 DEFAULT_MODEL = os.getenv("WORKSHOP_MODEL", "anthropic:claude-haiku-4-5")
+
+# ============================================================================
+# RUNTIME CONFIGURATION
+# ============================================================================
+
+
+@dataclass
+class Context:
+    """Runtime configuration for all agents.
+
+    This enables model selection in LangSmith Studio's configurable Assistants UI.
+    When deployed, users can choose from these models via a dropdown.
+
+    The model options are constrained to ensure compatibility and provide
+    a curated experience in the workshop.
+    """
+
+    model: Literal[
+        "anthropic:claude-haiku-4-5",
+        "anthropic:claude-sonnet-4-5",
+        "openai:gpt-5-mini",
+        "openai:gpt-5-nano",
+    ] = DEFAULT_MODEL
+
 
 # ============================================================================
 # DATA PATHS CONFIGURATION

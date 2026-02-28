@@ -9,7 +9,7 @@ from langchain.chat_models import init_chat_model
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import MessagesState
 
-from config import DEFAULT_MODEL
+from config import DEFAULT_MODEL, Context
 from tools import (
     get_order_item_price,
     get_order_items,
@@ -90,7 +90,7 @@ def create_db_agent(
         ... )
     """
     # Use provided values or fall back to module defaults
-    llm = init_chat_model(model or DEFAULT_MODEL)
+    llm = init_chat_model(model or DEFAULT_MODEL, configurable_fields=["model"])
     prompt = system_prompt or DB_AGENT_SYSTEM_PROMPT
     tools = DB_AGENT_BASE_TOOLS.copy()
 
@@ -105,6 +105,7 @@ def create_db_agent(
         "name": "db_agent",
         "system_prompt": prompt,
         "state_schema": state_schema or MessagesState,
+        "context_schema": Context,
     }
 
     # Add checkpointer for development (platform handles it for deployment)

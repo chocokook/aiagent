@@ -14,7 +14,7 @@ from langchain.chat_models import init_chat_model
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import MessagesState
 
-from config import DEFAULT_MODEL
+from config import DEFAULT_MODEL, Context
 from tools.database import execute_sql, get_database
 
 # ============================================================================
@@ -102,7 +102,7 @@ def create_sql_agent(
         ... )
     """
     # Use provided values or fall back to module defaults
-    llm = init_chat_model(model or DEFAULT_MODEL)
+    llm = init_chat_model(model or DEFAULT_MODEL, configurable_fields=["model"])
     prompt = system_prompt or _create_sql_system_prompt()
     tools = SQL_AGENT_BASE_TOOLS.copy()
 
@@ -117,6 +117,7 @@ def create_sql_agent(
         "name": "sql_agent",
         "system_prompt": prompt,
         "state_schema": state_schema or MessagesState,
+        "context_schema": Context,
     }
 
     # Add checkpointer for development (platform handles it for deployment)

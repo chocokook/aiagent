@@ -12,7 +12,7 @@ from langchain.tools import tool
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import MessagesState
 
-from config import DEFAULT_MODEL
+from config import DEFAULT_MODEL, Context
 
 # ============================================================================
 # AGENT CONFIGURATION
@@ -88,7 +88,7 @@ def create_supervisor_agent(
         ... )
     """
     # Use provided values or fall back to module defaults
-    llm = init_chat_model(model or DEFAULT_MODEL)
+    llm = init_chat_model(model or DEFAULT_MODEL, configurable_fields=["model"])
     prompt = system_prompt or SUPERVISOR_AGENT_SYSTEM_PROMPT
 
     # Dynamic prompt middleware to inject customer_id if it exists in state
@@ -128,6 +128,7 @@ def create_supervisor_agent(
         "name": "supervisor_agent",
         "state_schema": state_schema or MessagesState,
         "middleware": [supervisor_prompt],
+        "context_schema": Context,
     }
 
     # Add checkpointer for development (platform handles it for deployment)

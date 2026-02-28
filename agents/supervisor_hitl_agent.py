@@ -22,13 +22,14 @@ from langchain_core.messages import AIMessage, HumanMessage
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import START, MessagesState, StateGraph
 from langgraph.types import Command, interrupt
+from langgraph.runtime import Runtime
 from typing_extensions import Annotated, TypedDict
 
 # Import other agent factory functions
 from agents.db_agent import create_db_agent
 from agents.docs_agent import create_docs_agent
 from agents.supervisor_agent import create_supervisor_agent
-from config import DEFAULT_MODEL
+from config import DEFAULT_MODEL, Context
 from tools import get_customer_orders
 from tools.database import get_database
 
@@ -82,16 +83,17 @@ class CustomerInfo(NamedTuple):
     customer_name: str
 
 
-def classify_query_intent(query: str) -> QueryClassification:
+def classify_query_intent(query: str, model: str = DEFAULT_MODEL) -> QueryClassification:
     """Classify whether a query requires customer identity verification.
 
     Args:
         query: The user's query string
+        model: Model to use for classification (defaults to DEFAULT_MODEL)
 
     Returns:
         QueryClassification dict with reasoning and requires_verification fields
     """
-    llm = init_chat_model(DEFAULT_MODEL)
+    llm = init_chat_model(model, configurable_fields=["model"])
     structured_llm = llm.with_structured_output(QueryClassification)
     classification_prompt = """Analyze the following user's query to determine if it requires knowing their customer identity in order to answer the question."""
 
@@ -105,9 +107,13 @@ def classify_query_intent(query: str) -> QueryClassification:
     return classification
 
 
-def create_email_extractor():
-    """Create an LLM configured to extract emails from natural language."""
-    llm = init_chat_model(DEFAULT_MODEL)
+def create_email_extractor(model: str = DEFAULT_MODEL):
+    """Create an LLM configured to extract emails from natural language.
+
+    Args:
+        model: Model to use for email extraction (defaults to DEFAULT_MODEL)
+    """
+    llm = init_chat_model(model, configurable_fields=["model"])
     return llm.with_structured_output(EmailExtraction)
 
 
@@ -147,6 +153,7 @@ def validate_customer_email(email: str, db: SQLDatabase) -> CustomerInfo | None:
 
 def query_router(
     state: IntermediateState,
+    runtime: Runtime[Context],
 ) -> Command[Literal["verify_customer", "supervisor_agent"]]:
     """Route query based on verification needs.
 
@@ -161,7 +168,9 @@ def query_router(
 
     # Not already verified - classify query to see if verification is needed
     last_message = state["messages"][-1]
-    query_classification = classify_query_intent(last_message.content)
+    query_classification = classify_query_intent(
+        last_message.content, model=runtime.context.model
+    )
 
     # Route based on classification
     if query_classification.get("requires_verification"):
@@ -171,6 +180,7 @@ def query_router(
 
 def verify_customer(
     state: IntermediateState,
+    runtime: Runtime[Context],
 ) -> Command[Literal["supervisor_agent", "collect_email"]]:
     """Ensure we have a valid customer email and set the `customer_id` in state.
 
@@ -180,7 +190,7 @@ def verify_customer(
     last_message = state["messages"][-1]
 
     # Try to extract email using structured output
-    email_extractor = create_email_extractor()
+    email_extractor = create_email_extractor(model=runtime.context.model)
     extraction = email_extractor.invoke([last_message])
 
     # If we have an email, attempt to validate it
@@ -297,6 +307,7 @@ def create_supervisor_hitl_agent(
         input_schema=MessagesState,
         state_schema=IntermediateState,
         output_schema=MessagesState,
+        context_schema=Context,
     )
 
     # Add nodes
