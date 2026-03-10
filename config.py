@@ -77,6 +77,15 @@ DEFAULT_VECTORSTORE_PATH = (
 )
 
 # ============================================================================
+# DATABASE CONFIGURATION
+# ============================================================================
+
+# When DATABASE_URL is set, tools/database.py uses PostgreSQL.
+# Otherwise falls back to SQLite (default for notebooks and local dev).
+# Example: DATABASE_URL=postgresql://user:pass@localhost:5432/techhub
+DATABASE_URL = os.getenv("DATABASE_URL")
+
+# ============================================================================
 # DEPLOYMENT CONFIGURATION
 # ============================================================================
 

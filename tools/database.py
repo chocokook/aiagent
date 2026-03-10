@@ -13,7 +13,7 @@ The connection is created on first use and then cached for subsequent calls.
 from langchain.tools import ToolRuntime, tool
 from langchain_community.utilities import SQLDatabase
 
-from config import DEFAULT_DB_PATH
+from config import DATABASE_URL, DEFAULT_DB_PATH
 
 # Module-level database connection (lazy loaded)
 _db = None
@@ -22,15 +22,18 @@ _db = None
 def get_database():
     """Lazy load database connection.
 
-    Creates the database connection on first call, then returns the cached instance
-    for all subsequent calls.
+    Uses PostgreSQL when DATABASE_URL env var is set, otherwise SQLite.
+    Connection is created on first call and cached for subsequent calls.
 
     Returns:
         SQLDatabase: Cached database connection instance.
     """
     global _db
     if _db is None:
-        _db = SQLDatabase.from_uri(f"sqlite:///{DEFAULT_DB_PATH}")
+        if DATABASE_URL:
+            _db = SQLDatabase.from_uri(DATABASE_URL)
+        else:
+            _db = SQLDatabase.from_uri(f"sqlite:///{DEFAULT_DB_PATH}")
     return _db
 
 
