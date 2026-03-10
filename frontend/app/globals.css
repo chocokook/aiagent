@@ -1,0 +1,22 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-gray-50 text-gray-900 antialiased;
+  }
+}
+
+/* Blinking cursor for streaming text */
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0; }
+}
+.cursor-blink::after {
+  content: "▍";
+  display: inline-block;
+  animation: blink 1s step-start infinite;
+  margin-left: 1px;
+  color: #3b82f6;
+}
