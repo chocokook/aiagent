@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+*.egg-info/
+
+# Jupyter
+workshop_modules/
+.ipynb_checkpoints/
+
+# Data (vectorstores are large; mount as volume instead)
+data/vector_stores/
+
+# Frontend (has its own build step)
+frontend/node_modules/
+frontend/.next/
+
+# Git / IDE
+.git/
+.gitignore
+.claude/
+
+# Env files (passed via docker compose env_file)
+.env
+.env.local
