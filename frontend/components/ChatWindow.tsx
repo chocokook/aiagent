@@ -10,7 +10,7 @@ const WELCOME: string =
   "Hi! I'm TechHub's AI support assistant. I can help you with:\n• Order status & history\n• Product information\n• Return & shipping policies\n\nHow can I help you today?";
 
 export default function ChatWindow() {
-  const { messages, loading, interrupt, sendMessage, resumeWithInput, stop } = useChat();
+  const { messages, loading, interrupt, sendMessage, resumeWithInput, stop, clearHistory } = useChat();
   const bottomRef = useRef<HTMLDivElement>(null);
 
   // Auto-scroll to latest message
@@ -59,9 +59,20 @@ export default function ChatWindow() {
             onSend={sendMessage}
             onStop={stop}
           />
-          <p className="text-center text-xs text-gray-400 mt-2">
-            Powered by LangGraph · Press <kbd className="font-mono">Enter</kbd> to send
-          </p>
+          <div className="flex items-center justify-between mt-2">
+            <p className="text-xs text-gray-400">
+              Powered by LangGraph · Press <kbd className="font-mono">Enter</kbd> to send
+            </p>
+            {messages.length > 0 && (
+              <button
+                onClick={clearHistory}
+                className="text-xs text-gray-400 hover:text-gray-600 transition-colors"
+                title="Start a new conversation"
+              >
+                New conversation
+              </button>
+            )}
+          </div>
         </div>
       </div>
     </>
