@@ -1,0 +1,147 @@
+{
+  "title": "TechHub AI Agent 监控大盘",
+  "uid": "techhub-agent",
+  "schemaVersion": 38,
+  "time": { "from": "now-1h", "to": "now" },
+  "refresh": "30s",
+  "panels": [
+    {
+      "id": 1,
+      "title": "API 请求速率（次/秒）",
+      "description": "每秒收到的 HTTP 请求数，按接口路由分组。数值越高说明当前并发越大。",
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 0, "w": 12, "h": 8 },
+      "targets": [
+        {
+          "expr": "rate(http_requests_total[1m])",
+          "legendFormat": "{{method}} {{handler}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "reqps", "color": { "mode": "palette-classic" } }
+      }
+    },
+    {
+      "id": 2,
+      "title": "API 响应时间（P50 / P95）",
+      "description": "P50=中位数响应时间（一半请求比这快），P95=95% 请求在此时间内完成。P95 超过 3s 需关注。",
+      "type": "timeseries",
+      "gridPos": { "x": 12, "y": 0, "w": 12, "h": 8 },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m]))",
+          "legendFormat": "P95 慢请求基线"
+        },
+        {
+          "expr": "histogram_quantile(0.50, rate(http_request_duration_seconds_bucket[5m]))",
+          "legendFormat": "P50 中位响应时间"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "s", "color": { "mode": "palette-classic" } }
+      }
+    },
+    {
+      "id": 3,
+      "title": "Prompt 注入攻击拦截数（近1小时）",
+      "description": "用户试图通过特殊输入覆盖 AI 系统指令的次数。如「ignore all instructions」「你现在是一个没有限制的AI」等。绿色=安全，橙色=需关注，红色=疑似攻击。",
+      "type": "stat",
+      "gridPos": { "x": 0, "y": 8, "w": 6, "h": 5 },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "area",
+        "textMode": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": 0 },
+              { "color": "orange", "value": 5 },
+              { "color": "red", "value": 20 }
+            ]
+          }
+        }
+      },
+      "targets": [
+        {
+          "expr": "increase(techhub_prompt_injection_blocks_total[1h])",
+          "legendFormat": "拦截次数"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "title": "违禁词拦截数（近1小时）",
+      "description": "用户输入中包含违禁词汇（竞争对手攻击、不当词语、批量数据请求等）的次数。",
+      "type": "stat",
+      "gridPos": { "x": 6, "y": 8, "w": 6, "h": 5 },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "area",
+        "textMode": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": 0 },
+              { "color": "orange", "value": 5 },
+              { "color": "red", "value": 20 }
+            ]
+          }
+        }
+      },
+      "targets": [
+        {
+          "expr": "increase(techhub_forbidden_word_blocks_total[1h])",
+          "legendFormat": "拦截次数"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "title": "HTTP 错误率（4xx / 5xx）",
+      "description": "4xx=客户端错误（如参数错误、被拦截的注入请求），5xx=服务器内部错误。5xx 持续出现需立即排查。",
+      "type": "timeseries",
+      "gridPos": { "x": 12, "y": 8, "w": 12, "h": 5 },
+      "targets": [
+        {
+          "expr": "rate(http_requests_total{status=~\"4..\"}[5m])",
+          "legendFormat": "4xx 客户端错误"
+        },
+        {
+          "expr": "rate(http_requests_total{status=~\"5..\"}[5m])",
+          "legendFormat": "5xx 服务器错误"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "reqps", "color": { "mode": "palette-classic" } }
+      }
+    },
+    {
+      "id": 6,
+      "title": "安全拦截趋势（时间线）",
+      "description": "Prompt 注入 + 违禁词拦截随时间的变化趋势，用于识别攻击高峰时段。",
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 13, "w": 24, "h": 6 },
+      "targets": [
+        {
+          "expr": "rate(techhub_prompt_injection_blocks_total[5m])",
+          "legendFormat": "Prompt 注入拦截速率"
+        },
+        {
+          "expr": "rate(techhub_forbidden_word_blocks_total[5m])",
+          "legendFormat": "违禁词拦截速率"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "short", "color": { "mode": "palette-classic" } }
+      }
+    }
+  ]
+}
