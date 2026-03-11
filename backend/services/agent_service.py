@@ -8,10 +8,13 @@ Responsibilities:
 - Resume interrupted threads with user input
 """
 
+import hashlib
 import logging
+import re
 from typing import AsyncGenerator, Optional
 
-from langchain_core.messages import HumanMessage
+import redis as redis_lib
+from langchain_core.messages import AIMessage, AIMessageChunk, HumanMessage
 from langgraph.types import Interrupt
 
 from config import Context, DEFAULT_MODEL
@@ -22,6 +25,64 @@ logger = logging.getLogger(__name__)
 # Shared agent instance (created once on first use)
 # ---------------------------------------------------------------------------
 _agent = None
+
+# ---------------------------------------------------------------------------
+# Redis response cache
+# Caches final answers for non-personal general questions (e.g. "return policy").
+# Cache key = MD5 of normalised message text. TTL = 1 hour.
+# ---------------------------------------------------------------------------
+_CACHE_TTL = 3600  # seconds
+_redis: Optional[redis_lib.Redis] = None
+
+# Matches personal pronouns — same logic as supervisor_hitl_agent._PERSONAL_RE
+_PERSONAL_RE = re.compile(
+    r"\b(my|mine|i|i've|i'd|i'm|i'll|our|myself|me)\b",
+    re.IGNORECASE,
+)
+
+
+def _is_cacheable(message: str) -> bool:
+    """Return True if the message is a general (non-personal) query safe to cache."""
+    return not bool(_PERSONAL_RE.search(message))
+
+
+def _get_redis() -> Optional[redis_lib.Redis]:
+    global _redis
+    if _redis is None:
+        try:
+            client = redis_lib.Redis(host="redis", port=6379, decode_responses=True, socket_connect_timeout=1)
+            client.ping()
+            _redis = client
+            logger.info("Redis cache connected")
+        except Exception as exc:
+            logger.warning("Redis unavailable, caching disabled: %s", exc)
+            _redis = False  # type: ignore[assignment]  # sentinel: don't retry
+    return _redis if _redis else None
+
+
+def _cache_key(message: str) -> str:
+    normalised = message.lower().strip()
+    return f"agent_response:{hashlib.md5(normalised.encode()).hexdigest()}"
+
+
+def _cache_get(message: str) -> Optional[str]:
+    r = _get_redis()
+    if r is None:
+        return None
+    try:
+        return r.get(_cache_key(message))
+    except Exception:
+        return None
+
+
+def _cache_set(message: str, response: str) -> None:
+    r = _get_redis()
+    if r is None:
+        return
+    try:
+        r.setex(_cache_key(message), _CACHE_TTL, response)
+    except Exception:
+        pass
 
 
 def _get_agent():
@@ -41,11 +102,15 @@ def _get_agent():
 
 
 def _build_config(thread_id: str, model: str = DEFAULT_MODEL) -> dict:
-    """Build LangGraph run config with thread_id and runtime context."""
+    """Build LangGraph run config with thread_id and runtime context.
+
+    LangGraph's context_schema=Context reads individual fields from configurable,
+    so we pass 'model' directly rather than wrapping in a Context instance.
+    """
     return {
         "configurable": {
             "thread_id": thread_id,
-            "context": Context(model=model),
+            "model": model,
         }
     }
 
@@ -80,6 +145,13 @@ def invoke_agent(
             "interrupt_prompt": str | None,
         }
     """
+    # Cache hit: return immediately for repeated general questions
+    if _is_cacheable(user_message):
+        cached = _cache_get(user_message)
+        if cached:
+            logger.debug("Cache hit for: %.60s", user_message)
+            return {"content": cached, "interrupted": False, "interrupt_prompt": None}
+
     agent = _get_agent()
     config = _build_config(thread_id, model)
 
@@ -95,6 +167,11 @@ def invoke_agent(
         (m.content for m in reversed(messages) if hasattr(m, "type") and m.type == "ai"),
         "",
     )
+
+    # Store in cache for future identical queries
+    if last_ai and _is_cacheable(user_message):
+        _cache_set(user_message, last_ai)
+
     return {"content": last_ai, "interrupted": False, "interrupt_prompt": None}
 
 
@@ -106,44 +183,86 @@ async def stream_agent(
     """
     Stream the agent response token by token via async generator.
 
+    Uses asyncio.Queue to bridge the synchronous LangGraph stream and the
+    async generator, so each token is yielded to the client immediately as
+    the LLM generates it rather than buffered until completion.
+
     Yields SSE-formatted strings:
         "data: <token>\n\n"
         "data: [DONE]\n\n"
         "data: [INTERRUPT] <prompt>\n\n"   ← when HITL pause occurs
     """
     import asyncio
+    import json
+
+    # Cache hit: yield cached response instantly (no LLM call needed)
+    if _is_cacheable(user_message):
+        cached = _cache_get(user_message)
+        if cached:
+            logger.debug("Stream cache hit for: %.60s", user_message)
+            yield f"data: {json.dumps(cached)}\n\n"
+            yield "data: [DONE]\n\n"
+            return
 
     agent = _get_agent()
     config = _build_config(thread_id, model)
     state_input = {"messages": [HumanMessage(content=user_message)]}
 
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
+    queue: asyncio.Queue = asyncio.Queue()
+
+    # Internal nodes that produce structured JSON (not user-facing)
+    _INTERNAL_NODES = {"query_router", "verify_customer", "collect_email"}
+    _SENTINEL = object()
 
     def _run_stream():
-        chunks = []
-        interrupted = False
-        interrupt_prompt = None
-        for chunk in agent.stream(state_input, config=config, stream_mode="messages"):
-            # chunk is (message_chunk, metadata) in messages stream mode
-            if isinstance(chunk, tuple):
-                msg_chunk, _ = chunk
-                if hasattr(msg_chunk, "content") and msg_chunk.content:
-                    chunks.append(msg_chunk.content)
-            elif isinstance(chunk, dict) and "__interrupt__" in chunk:
-                interrupts = chunk["__interrupt__"]
-                if interrupts:
-                    interrupted = True
-                    interrupt_prompt = str(interrupts[0].value)
-        return chunks, interrupted, interrupt_prompt
+        try:
+            for chunk in agent.stream(state_input, config=config, stream_mode="messages"):
+                if isinstance(chunk, tuple):
+                    msg_chunk, metadata = chunk
+                    node = metadata.get("langgraph_node", "")
+                    if node in _INTERNAL_NODES:
+                        continue
+                    # Forward LLM-generated AI messages; skip ToolMessages, HumanMessages, etc.
+                    # Note: LangGraph yields complete AIMessage (not AIMessageChunk) here because
+                    # the inner agents run synchronously — true token streaming is unavailable.
+                    if isinstance(msg_chunk, (AIMessage, AIMessageChunk)) and msg_chunk.content:
+                        loop.call_soon_threadsafe(queue.put_nowait, ("token", msg_chunk.content))
+                elif isinstance(chunk, dict) and "__interrupt__" in chunk:
+                    interrupts = chunk["__interrupt__"]
+                    if interrupts:
+                        loop.call_soon_threadsafe(queue.put_nowait, ("interrupt", str(interrupts[0].value)))
+        except Exception as exc:
+            loop.call_soon_threadsafe(queue.put_nowait, ("error", str(exc)))
+        finally:
+            loop.call_soon_threadsafe(queue.put_nowait, (_SENTINEL, None))
 
-    chunks, interrupted, interrupt_prompt = await loop.run_in_executor(None, _run_stream)
+    loop.run_in_executor(None, _run_stream)
 
-    if interrupted:
-        yield f"data: [INTERRUPT] {interrupt_prompt}\n\n"
-    else:
-        for token in chunks:
-            yield f"data: {token}\n\n"
-        yield "data: [DONE]\n\n"
+    collected_tokens: list[str] = []
+    interrupted = False
+
+    while True:
+        kind, value = await queue.get()
+        if kind is _SENTINEL:
+            yield "data: [DONE]\n\n"
+            break
+        elif kind == "interrupt":
+            interrupted = True
+            yield f"data: [INTERRUPT] {value}\n\n"
+            break
+        elif kind == "error":
+            logger.error("stream_agent error: %s", value)
+            yield "data: [DONE]\n\n"
+            break
+        else:
+            import json
+            collected_tokens.append(value)
+            yield f"data: {json.dumps(value)}\n\n"
+
+    # Store assembled response in cache for future identical queries
+    if not interrupted and collected_tokens and _is_cacheable(user_message):
+        _cache_set(user_message, "".join(collected_tokens))
 
 
 def resume_agent(
@@ -182,36 +301,55 @@ async def stream_resume_agent(
     user_input: str,
     model: str = DEFAULT_MODEL,
 ) -> AsyncGenerator[str, None]:
-    """Streaming version of resume_agent."""
+    """Streaming version of resume_agent. Uses queue-based real streaming."""
     import asyncio
     from langgraph.types import Command
 
     agent = _get_agent()
     config = _build_config(thread_id, model)
 
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
+    queue: asyncio.Queue = asyncio.Queue()
+
+    _INTERNAL_NODES = {"query_router", "verify_customer", "collect_email"}
+    _SENTINEL = object()
 
     def _run_stream():
-        chunks = []
-        interrupted = False
-        interrupt_prompt = None
-        for chunk in agent.stream(Command(resume=user_input), config=config, stream_mode="messages"):
-            if isinstance(chunk, tuple):
-                msg_chunk, _ = chunk
-                if hasattr(msg_chunk, "content") and msg_chunk.content:
-                    chunks.append(msg_chunk.content)
-            elif isinstance(chunk, dict) and "__interrupt__" in chunk:
-                interrupts = chunk["__interrupt__"]
-                if interrupts:
-                    interrupted = True
-                    interrupt_prompt = str(interrupts[0].value)
-        return chunks, interrupted, interrupt_prompt
+        try:
+            for chunk in agent.stream(Command(resume=user_input), config=config, stream_mode="messages"):
+                if isinstance(chunk, tuple):
+                    msg_chunk, metadata = chunk
+                    node = metadata.get("langgraph_node", "")
+                    if node in _INTERNAL_NODES:
+                        continue
+                    # Forward LLM-generated AI messages; skip ToolMessages, HumanMessages, etc.
+                    # Note: LangGraph yields complete AIMessage (not AIMessageChunk) here because
+                    # the inner agents run synchronously — true token streaming is unavailable.
+                    if isinstance(msg_chunk, (AIMessage, AIMessageChunk)) and msg_chunk.content:
+                        loop.call_soon_threadsafe(queue.put_nowait, ("token", msg_chunk.content))
+                elif isinstance(chunk, dict) and "__interrupt__" in chunk:
+                    interrupts = chunk["__interrupt__"]
+                    if interrupts:
+                        loop.call_soon_threadsafe(queue.put_nowait, ("interrupt", str(interrupts[0].value)))
+        except Exception as exc:
+            loop.call_soon_threadsafe(queue.put_nowait, ("error", str(exc)))
+        finally:
+            loop.call_soon_threadsafe(queue.put_nowait, (_SENTINEL, None))
 
-    chunks, interrupted, interrupt_prompt = await loop.run_in_executor(None, _run_stream)
+    loop.run_in_executor(None, _run_stream)
 
-    if interrupted:
-        yield f"data: [INTERRUPT] {interrupt_prompt}\n\n"
-    else:
-        for token in chunks:
-            yield f"data: {token}\n\n"
-        yield "data: [DONE]\n\n"
+    while True:
+        kind, value = await queue.get()
+        if kind is _SENTINEL:
+            yield "data: [DONE]\n\n"
+            break
+        elif kind == "interrupt":
+            yield f"data: [INTERRUPT] {value}\n\n"
+            break
+        elif kind == "error":
+            logger.error("stream_resume_agent error: %s", value)
+            yield "data: [DONE]\n\n"
+            break
+        else:
+            import json
+            yield f"data: {json.dumps(value)}\n\n"

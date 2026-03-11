@@ -89,7 +89,11 @@ async function parseSSE(
       } else if (data.startsWith("[INTERRUPT] ")) {
         onEvent({ type: "interrupt", prompt: data.slice(12) });
       } else if (data) {
-        onEvent({ type: "token", content: data });
+        try {
+          onEvent({ type: "token", content: JSON.parse(data) });
+        } catch {
+          onEvent({ type: "token", content: data });
+        }
       }
     }
   }
