@@ -11,6 +11,7 @@ from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 
 from backend.models import ChatRequest, ChatResponse, ResumeRequest
+from backend.security.prompt_guard import validate_input
 from backend.services import (
     create_session,
     get_thread_id,
@@ -39,6 +40,9 @@ async def chat(req: ChatRequest):
     - If `session_id` is omitted a new session is created automatically.
     - Set `stream=true` to receive a streaming SSE response instead.
     """
+    # Security: validate input before processing
+    validate_input(req.message)
+
     # Resolve or create session
     if req.session_id and session_exists(req.session_id):
         session_id = req.session_id
@@ -85,6 +89,9 @@ async def resume_chat(req: ResumeRequest):
     """
     if not session_exists(req.session_id):
         raise HTTPException(status_code=404, detail="Session not found")
+
+    # Security: validate resume input too
+    validate_input(req.user_input)
 
     thread_id = get_thread_id(req.session_id)
     if thread_id is None:
