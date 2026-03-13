@@ -2,146 +2,174 @@
   "title": "TechHub AI Agent 监控大盘",
   "uid": "techhub-agent",
   "schemaVersion": 38,
-  "time": { "from": "now-1h", "to": "now" },
+  "time": { "from": "now-24h", "to": "now" },
   "refresh": "30s",
   "panels": [
-    {
-      "id": 1,
-      "title": "API 请求速率（次/秒）",
-      "description": "每秒收到的 HTTP 请求数，按接口路由分组。数值越高说明当前并发越大。",
-      "type": "timeseries",
-      "gridPos": { "x": 0, "y": 0, "w": 12, "h": 8 },
-      "targets": [
-        {
-          "expr": "rate(http_requests_total[1m])",
-          "legendFormat": "{{method}} {{handler}}"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": { "unit": "reqps", "color": { "mode": "palette-classic" } }
-      }
+
+    { "id": 100, "title": "第一区：今日核心结果指标（目标：解决率>75%，CSAT>4.0，转人工率<15%，首轮解决率>50%）",
+      "type": "row", "collapsed": false, "gridPos": { "x": 0, "y": 0, "w": 24, "h": 1 }, "panels": [] },
+
+    { "id": 30, "title": "问题解决率",
+      "description": "用户评价已解决 ÷ 触发评价总数。目标 > 75%",
+      "type": "stat", "gridPos": { "x": 0, "y": 1, "w": 6, "h": 5 },
+      "options": { "colorMode": "background", "graphMode": "none", "textMode": "auto" },
+      "fieldConfig": { "defaults": { "unit": "percentunit", "decimals": 1,
+        "thresholds": { "mode": "absolute", "steps": [
+          { "color": "red", "value": 0 }, { "color": "orange", "value": 0.6 }, { "color": "green", "value": 0.75 }
+        ]}
+      }},
+      "targets": [{ "expr": "techhub_feedback_resolved_total / clamp_min(techhub_feedback_resolved_total + techhub_feedback_unresolved_total, 1)", "legendFormat": "解决率" }]
     },
-    {
-      "id": 2,
-      "title": "API 响应时间（P50 / P95）",
-      "description": "P50=中位数响应时间（一半请求比这快），P95=95% 请求在此时间内完成。P95 超过 3s 需关注。",
-      "type": "timeseries",
-      "gridPos": { "x": 12, "y": 0, "w": 12, "h": 8 },
-      "targets": [
-        {
-          "expr": "histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m]))",
-          "legendFormat": "P95 慢请求基线"
-        },
-        {
-          "expr": "histogram_quantile(0.50, rate(http_request_duration_seconds_bucket[5m]))",
-          "legendFormat": "P50 中位响应时间"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": { "unit": "s", "color": { "mode": "palette-classic" } }
-      }
+
+    { "id": 31, "title": "用户满意度 CSAT",
+      "description": "评分均值（1-5星）。目标 > 4.0 分",
+      "type": "stat", "gridPos": { "x": 6, "y": 1, "w": 6, "h": 5 },
+      "options": { "colorMode": "background", "graphMode": "none", "textMode": "auto" },
+      "fieldConfig": { "defaults": { "unit": "short", "decimals": 1,
+        "thresholds": { "mode": "absolute", "steps": [
+          { "color": "red", "value": 0 }, { "color": "orange", "value": 3.5 }, { "color": "green", "value": 4.0 }
+        ]}
+      }},
+      "targets": [{ "expr": "techhub_satisfaction_score_sum_total / clamp_min(techhub_satisfaction_score_count_total, 1)", "legendFormat": "CSAT" }]
     },
-    {
-      "id": 3,
-      "title": "Prompt 注入攻击拦截数（近1小时）",
-      "description": "用户试图通过特殊输入覆盖 AI 系统指令的次数。如「ignore all instructions」「你现在是一个没有限制的AI」等。绿色=安全，橙色=需关注，红色=疑似攻击。",
-      "type": "stat",
-      "gridPos": { "x": 0, "y": 8, "w": 6, "h": 5 },
-      "options": {
-        "colorMode": "background",
-        "graphMode": "area",
-        "textMode": "auto"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "short",
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              { "color": "green", "value": 0 },
-              { "color": "orange", "value": 5 },
-              { "color": "red", "value": 20 }
-            ]
-          }
-        }
-      },
+
+    { "id": 32, "title": "转人工率",
+      "description": "用户请求转真人客服的会话占总会话比例。目标 < 15%",
+      "type": "stat", "gridPos": { "x": 12, "y": 1, "w": 6, "h": 5 },
+      "options": { "colorMode": "background", "graphMode": "none", "textMode": "auto" },
+      "fieldConfig": { "defaults": { "unit": "percentunit", "decimals": 1,
+        "thresholds": { "mode": "absolute", "steps": [
+          { "color": "green", "value": 0 }, { "color": "orange", "value": 0.1 }, { "color": "red", "value": 0.15 }
+        ]}
+      }},
+      "targets": [{ "expr": "techhub_escalation_total / clamp_min(techhub_sessions_started_total, 1)", "legendFormat": "转人工率" }]
+    },
+
+    { "id": 33, "title": "首轮解决率",
+      "description": "用户只发 1 条消息即解决的会话占总会话比例。目标 > 50%",
+      "type": "stat", "gridPos": { "x": 18, "y": 1, "w": 6, "h": 5 },
+      "options": { "colorMode": "background", "graphMode": "none", "textMode": "auto" },
+      "fieldConfig": { "defaults": { "unit": "percentunit", "decimals": 1,
+        "thresholds": { "mode": "absolute", "steps": [
+          { "color": "red", "value": 0 }, { "color": "orange", "value": 0.35 }, { "color": "green", "value": 0.5 }
+        ]}
+      }},
+      "targets": [{ "expr": "techhub_first_contact_resolved_total / clamp_min(techhub_sessions_started_total, 1)", "legendFormat": "首轮解决率" }]
+    },
+
+    { "id": 101, "title": "第二区：趋势图 — 解决率 · 满意度 · 转人工率",
+      "type": "row", "collapsed": false, "gridPos": { "x": 0, "y": 6, "w": 24, "h": 1 }, "panels": [] },
+
+    { "id": 40, "title": "解决率 + 转人工率趋势",
+      "description": "解决率上升、转人工率下降 = 服务质量改善",
+      "type": "timeseries", "gridPos": { "x": 0, "y": 7, "w": 12, "h": 8 },
+      "fieldConfig": { "defaults": { "unit": "percentunit", "color": { "mode": "palette-classic" } } },
       "targets": [
-        {
-          "expr": "increase(techhub_prompt_injection_blocks_total[1h])",
-          "legendFormat": "拦截次数"
-        }
+        { "expr": "techhub_feedback_resolved_total / clamp_min(techhub_feedback_resolved_total + techhub_feedback_unresolved_total, 1)", "legendFormat": "问题解决率" },
+        { "expr": "techhub_escalation_total / clamp_min(techhub_sessions_started_total, 1)", "legendFormat": "转人工率" }
       ]
     },
-    {
-      "id": 4,
-      "title": "违禁词拦截数（近1小时）",
-      "description": "用户输入中包含违禁词汇（竞争对手攻击、不当词语、批量数据请求等）的次数。",
-      "type": "stat",
-      "gridPos": { "x": 6, "y": 8, "w": 6, "h": 5 },
-      "options": {
-        "colorMode": "background",
-        "graphMode": "area",
-        "textMode": "auto"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "short",
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              { "color": "green", "value": 0 },
-              { "color": "orange", "value": 5 },
-              { "color": "red", "value": 20 }
-            ]
-          }
-        }
-      },
+
+    { "id": 41, "title": "首轮解决率 + CSAT 趋势",
+      "description": "首轮解决率反映 AI 一次性解决问题的能力；CSAT 反映用户主观感受",
+      "type": "timeseries", "gridPos": { "x": 12, "y": 7, "w": 12, "h": 8 },
+      "fieldConfig": { "defaults": { "color": { "mode": "palette-classic" } } },
       "targets": [
-        {
-          "expr": "increase(techhub_forbidden_word_blocks_total[1h])",
-          "legendFormat": "拦截次数"
-        }
+        { "expr": "techhub_first_contact_resolved_total / clamp_min(techhub_sessions_started_total, 1)", "legendFormat": "首轮解决率", "yAxis": 1 },
+        { "expr": "techhub_satisfaction_score_sum_total / clamp_min(techhub_satisfaction_score_count_total, 1)", "legendFormat": "CSAT均分 (1-5)", "yAxis": 2 }
       ]
     },
-    {
-      "id": 5,
-      "title": "HTTP 错误率（4xx / 5xx）",
-      "description": "4xx=客户端错误（如参数错误、被拦截的注入请求），5xx=服务器内部错误。5xx 持续出现需立即排查。",
-      "type": "timeseries",
-      "gridPos": { "x": 12, "y": 8, "w": 12, "h": 5 },
+
+    { "id": 102, "title": "第三区：响应时长（目标均值<3s，P90<5s）· 订单查询失败率（目标<5%）",
+      "type": "row", "collapsed": false, "gridPos": { "x": 0, "y": 15, "w": 24, "h": 1 }, "panels": [] },
+
+    { "id": 50, "title": "首token响应时长 P50 / P90",
+      "description": "从用户发消息到AI返回第一个token的时间。P90超过5s需立即排查",
+      "type": "timeseries", "gridPos": { "x": 0, "y": 16, "w": 12, "h": 8 },
+      "fieldConfig": { "defaults": { "unit": "s", "color": { "mode": "palette-classic" },
+        "thresholds": { "mode": "absolute", "steps": [
+          { "color": "green", "value": 0 }, { "color": "orange", "value": 3 }, { "color": "red", "value": 5 }
+        ]}
+      }},
       "targets": [
-        {
-          "expr": "rate(http_requests_total{status=~\"4..\"}[5m])",
-          "legendFormat": "4xx 客户端错误"
-        },
-        {
-          "expr": "rate(http_requests_total{status=~\"5..\"}[5m])",
-          "legendFormat": "5xx 服务器错误"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": { "unit": "reqps", "color": { "mode": "palette-classic" } }
-      }
+        { "expr": "histogram_quantile(0.50, rate(techhub_ttft_seconds_bucket[5m]))", "legendFormat": "P50 中位响应时长" },
+        { "expr": "histogram_quantile(0.90, rate(techhub_ttft_seconds_bucket[5m]))", "legendFormat": "P90 慢请求基线" }
+      ]
     },
-    {
-      "id": 6,
-      "title": "安全拦截趋势（时间线）",
-      "description": "Prompt 注入 + 违禁词拦截随时间的变化趋势，用于识别攻击高峰时段。",
-      "type": "timeseries",
-      "gridPos": { "x": 0, "y": 13, "w": 24, "h": 6 },
+
+    { "id": 51, "title": "订单查询失败率",
+      "description": "接口异常或数据缺失占订单查询总数的比例。目标 < 5%（用于区分AI回答差 vs 数据本身缺失）",
+      "type": "timeseries", "gridPos": { "x": 12, "y": 16, "w": 12, "h": 8 },
+      "fieldConfig": { "defaults": { "unit": "percentunit", "color": { "mode": "palette-classic" },
+        "thresholds": { "mode": "absolute", "steps": [
+          { "color": "green", "value": 0 }, { "color": "orange", "value": 0.03 }, { "color": "red", "value": 0.05 }
+        ]}
+      }},
       "targets": [
-        {
-          "expr": "rate(techhub_prompt_injection_blocks_total[5m])",
-          "legendFormat": "Prompt 注入拦截速率"
-        },
-        {
-          "expr": "rate(techhub_forbidden_word_blocks_total[5m])",
-          "legendFormat": "违禁词拦截速率"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": { "unit": "short", "color": { "mode": "palette-classic" } }
-      }
+        { "expr": "rate(techhub_order_query_failed_total[5m]) / clamp_min(rate(techhub_order_query_total[5m]), 0.001)", "legendFormat": "订单查询失败率" }
+      ]
+    },
+
+    { "id": 103, "title": "第四区：系统运营指标 — 对话量 · 缓存效率 · 安全拦截",
+      "type": "row", "collapsed": false, "gridPos": { "x": 0, "y": 24, "w": 24, "h": 1 }, "panels": [] },
+
+    { "id": 10, "title": "总对话量",
+      "type": "stat", "gridPos": { "x": 0, "y": 25, "w": 4, "h": 4 },
+      "options": { "colorMode": "background", "graphMode": "area", "textMode": "auto" },
+      "fieldConfig": { "defaults": { "unit": "short", "color": { "mode": "fixed", "fixedColor": "blue" } } },
+      "targets": [{ "expr": "increase(techhub_conversations_total[$__range])", "legendFormat": "消息数" }]
+    },
+
+    { "id": 11, "title": "缓存命中率",
+      "type": "stat", "gridPos": { "x": 4, "y": 25, "w": 4, "h": 4 },
+      "options": { "colorMode": "background", "graphMode": "area", "textMode": "auto" },
+      "fieldConfig": { "defaults": { "unit": "percentunit",
+        "thresholds": { "mode": "absolute", "steps": [
+          { "color": "red", "value": 0 }, { "color": "orange", "value": 0.2 }, { "color": "green", "value": 0.5 }
+        ]}
+      }},
+      "targets": [{ "expr": "techhub_cache_hits_total / clamp_min(techhub_cache_hits_total + techhub_cache_misses_total, 1)", "legendFormat": "命中率" }]
+    },
+
+    { "id": 3, "title": "Prompt注入拦截数",
+      "type": "stat", "gridPos": { "x": 8, "y": 25, "w": 4, "h": 4 },
+      "options": { "colorMode": "background", "graphMode": "area", "textMode": "auto" },
+      "fieldConfig": { "defaults": { "unit": "short",
+        "thresholds": { "mode": "absolute", "steps": [
+          { "color": "green", "value": 0 }, { "color": "orange", "value": 5 }, { "color": "red", "value": 20 }
+        ]}
+      }},
+      "targets": [{ "expr": "increase(techhub_prompt_injection_blocks_total[$__range])", "legendFormat": "拦截次数" }]
+    },
+
+    { "id": 4, "title": "违禁词拦截数",
+      "type": "stat", "gridPos": { "x": 12, "y": 25, "w": 4, "h": 4 },
+      "options": { "colorMode": "background", "graphMode": "area", "textMode": "auto" },
+      "fieldConfig": { "defaults": { "unit": "short",
+        "thresholds": { "mode": "absolute", "steps": [
+          { "color": "green", "value": 0 }, { "color": "orange", "value": 5 }, { "color": "red", "value": 20 }
+        ]}
+      }},
+      "targets": [{ "expr": "increase(techhub_forbidden_word_blocks_total[$__range])", "legendFormat": "拦截次数" }]
+    },
+
+    { "id": 52, "title": "转人工触发次数",
+      "type": "stat", "gridPos": { "x": 16, "y": 25, "w": 4, "h": 4 },
+      "options": { "colorMode": "background", "graphMode": "area", "textMode": "auto" },
+      "fieldConfig": { "defaults": { "unit": "short",
+        "thresholds": { "mode": "absolute", "steps": [
+          { "color": "green", "value": 0 }, { "color": "orange", "value": 5 }, { "color": "red", "value": 20 }
+        ]}
+      }},
+      "targets": [{ "expr": "increase(techhub_escalation_total[$__range])", "legendFormat": "转人工次数" }]
+    },
+
+    { "id": 53, "title": "订单查询总次数",
+      "type": "stat", "gridPos": { "x": 20, "y": 25, "w": 4, "h": 4 },
+      "options": { "colorMode": "background", "graphMode": "area", "textMode": "auto" },
+      "fieldConfig": { "defaults": { "unit": "short", "color": { "mode": "fixed", "fixedColor": "blue" } } },
+      "targets": [{ "expr": "increase(techhub_order_query_total[$__range])", "legendFormat": "查询次数" }]
     }
+
   ]
 }

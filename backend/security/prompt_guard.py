@@ -14,6 +14,8 @@ from typing import Optional
 
 from fastapi import HTTPException
 
+from backend.metrics import prompt_injection_blocks, forbidden_word_blocks
+
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
@@ -101,6 +103,7 @@ class PromptGuard:
                     pattern.pattern[:60],
                     text[:100],
                 )
+                prompt_injection_blocks.inc()
                 return GuardResult(
                     blocked=True,
                     reason="Your message contains content that cannot be processed.",
@@ -117,6 +120,7 @@ class PromptGuard:
                     pattern.pattern[:60],
                     text[:100],
                 )
+                forbidden_word_blocks.inc()
                 return GuardResult(
                     blocked=True,
                     reason="Your message contains content that is not allowed.",

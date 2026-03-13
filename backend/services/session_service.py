@@ -57,6 +57,9 @@ SESSION_TTL = 60 * 60 * 24
 
 def create_session() -> str:
     """Create a new session and return its session_id."""
+    from backend.metrics import sessions_started_total
+    sessions_started_total.inc()
+
     session_id = str(uuid.uuid4())
     thread_id = str(uuid.uuid4())  # LangGraph thread ID (unique per session)
 

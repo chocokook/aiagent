@@ -11,6 +11,7 @@ Responsibilities:
 import hashlib
 import logging
 import re
+import time
 from typing import AsyncGenerator, Optional
 
 import redis as redis_lib
@@ -18,6 +19,15 @@ from langchain_core.messages import AIMessage, AIMessageChunk, HumanMessage
 from langgraph.types import Interrupt
 
 from config import Context, DEFAULT_MODEL
+from backend.metrics import (
+    cache_hits_total,
+    cache_misses_total,
+    conversations_total,
+    escalation_total,
+    ttft_seconds,
+    verification_triggered_total,
+    verification_skipped_total,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -37,6 +47,14 @@ _redis: Optional[redis_lib.Redis] = None
 # Matches personal pronouns — same logic as supervisor_hitl_agent._PERSONAL_RE
 _PERSONAL_RE = re.compile(
     r"\b(my|mine|i|i've|i'd|i'm|i'll|our|myself|me)\b",
+    re.IGNORECASE,
+)
+
+# Matches escalation intent (user wants a human agent)
+_ESCALATION_RE = re.compile(
+    r"转人工|找人工|要人工|真人|人工客服|找客服|speak to (a |an )?(human|agent|person|representative)"
+    r"|talk to (a |an )?(human|agent|person|representative)"
+    r"|human agent|live agent|real person",
     re.IGNORECASE,
 )
 
@@ -145,12 +163,22 @@ def invoke_agent(
             "interrupt_prompt": str | None,
         }
     """
+    conversations_total.inc()
+
+    # Escalation detection
+    if _ESCALATION_RE.search(user_message):
+        escalation_total.inc()
+
     # Cache hit: return immediately for repeated general questions
     if _is_cacheable(user_message):
         cached = _cache_get(user_message)
         if cached:
             logger.debug("Cache hit for: %.60s", user_message)
+            cache_hits_total.inc()
             return {"content": cached, "interrupted": False, "interrupt_prompt": None}
+        cache_misses_total.inc()
+    else:
+        verification_skipped_total.inc()
 
     agent = _get_agent()
     config = _build_config(thread_id, model)
@@ -160,6 +188,7 @@ def invoke_agent(
 
     interrupt_prompt = _extract_interrupt(result)
     if interrupt_prompt:
+        verification_triggered_total.inc()
         return {"content": "", "interrupted": True, "interrupt_prompt": interrupt_prompt}
 
     messages = result.get("messages", [])
@@ -195,18 +224,29 @@ async def stream_agent(
     import asyncio
     import json
 
+    conversations_total.inc()
+
+    # Escalation detection
+    if _ESCALATION_RE.search(user_message):
+        escalation_total.inc()
+
     # Cache hit: yield cached response instantly (no LLM call needed)
     if _is_cacheable(user_message):
         cached = _cache_get(user_message)
         if cached:
             logger.debug("Stream cache hit for: %.60s", user_message)
+            cache_hits_total.inc()
             yield f"data: {json.dumps(cached)}\n\n"
             yield "data: [DONE]\n\n"
             return
+        cache_misses_total.inc()
+    else:
+        verification_skipped_total.inc()
 
     agent = _get_agent()
     config = _build_config(thread_id, model)
     state_input = {"messages": [HumanMessage(content=user_message)]}
+    _request_start = time.monotonic()  # T1: user message received
 
     loop = asyncio.get_running_loop()
     queue: asyncio.Queue = asyncio.Queue()
@@ -241,6 +281,7 @@ async def stream_agent(
 
     collected_tokens: list[str] = []
     interrupted = False
+    _first_token_recorded = False
 
     while True:
         kind, value = await queue.get()
@@ -249,6 +290,7 @@ async def stream_agent(
             break
         elif kind == "interrupt":
             interrupted = True
+            verification_triggered_total.inc()
             yield f"data: [INTERRUPT] {value}\n\n"
             break
         elif kind == "error":
@@ -257,6 +299,10 @@ async def stream_agent(
             break
         else:
             import json
+            # Record TTFT on first token
+            if not _first_token_recorded:
+                ttft_seconds.observe(time.monotonic() - _request_start)
+                _first_token_recorded = True
             collected_tokens.append(value)
             yield f"data: {json.dumps(value)}\n\n"
 

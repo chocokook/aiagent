@@ -14,10 +14,11 @@ import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from prometheus_fastapi_instrumentator import Instrumentator
-from prometheus_client import Counter
 
 from backend.api.routes.chat import router as chat_router
+from backend.api.routes.feedback import router as feedback_router
 from backend.api.routes.sessions import router as sessions_router
+import backend.metrics  # noqa: F401 — registers all counters on import
 
 logging.basicConfig(level=logging.INFO)
 
@@ -25,18 +26,6 @@ app = FastAPI(
     title="TechHub Customer Support API",
     description="AI-powered customer support agent backed by LangGraph",
     version="0.1.0",
-)
-
-# ---------------------------------------------------------------------------
-# Custom metrics
-# ---------------------------------------------------------------------------
-prompt_injection_blocks = Counter(
-    "techhub_prompt_injection_blocks_total",
-    "Number of requests blocked by prompt injection guard",
-)
-forbidden_word_blocks = Counter(
-    "techhub_forbidden_word_blocks_total",
-    "Number of requests blocked by forbidden word filter",
 )
 
 # ---------------------------------------------------------------------------
@@ -59,6 +48,7 @@ app.add_middleware(
 # Routers
 # ---------------------------------------------------------------------------
 app.include_router(chat_router, prefix="/api/v1")
+app.include_router(feedback_router, prefix="/api/v1")
 app.include_router(sessions_router, prefix="/api/v1")
 
 

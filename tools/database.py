@@ -14,6 +14,7 @@ from langchain.tools import ToolRuntime, tool
 from langchain_community.utilities import SQLDatabase
 
 from config import DATABASE_URL, DEFAULT_DB_PATH
+from backend.metrics import order_query_failed_total, order_query_total
 
 # Module-level database connection (lazy loaded)
 _db = None
@@ -54,17 +55,23 @@ def get_order_status(order_id: str) -> str:
     Returns:
         Formatted string with order status, dates, and tracking number.
     """
+    order_query_total.inc()
     db = get_database()
-    result = db._execute(
-        f"""
-        SELECT order_id, order_date, status, shipped_date, tracking_number
-        FROM orders
-        WHERE order_id = '{order_id}'
-    """
-    )
-    result = extract_values(result)
+    try:
+        result = db._execute(
+            f"""
+            SELECT order_id, order_date, status, shipped_date, tracking_number
+            FROM orders
+            WHERE order_id = '{order_id}'
+        """
+        )
+        result = extract_values(result)
+    except Exception as e:
+        order_query_failed_total.inc()
+        return f"Error querying order {order_id}: {e}"
 
     if not result:
+        order_query_failed_total.inc()
         return f"Order {order_id} not found."
 
     order_id, order_date, status, shipped_date, tracking_number = result[0]
@@ -93,17 +100,23 @@ def get_order_items(order_id: str) -> str:
     Returns:
         Formatted string with product IDs and quantities (no prices).
     """
+    order_query_total.inc()
     db = get_database()
-    result = db._execute(
-        f"""
-        SELECT product_id, quantity
-        FROM order_items
-        WHERE order_id = '{order_id}'
-    """
-    )
-    result = extract_values(result)
+    try:
+        result = db._execute(
+            f"""
+            SELECT product_id, quantity
+            FROM order_items
+            WHERE order_id = '{order_id}'
+        """
+        )
+        result = extract_values(result)
+    except Exception as e:
+        order_query_failed_total.inc()
+        return f"Error querying items for order {order_id}: {e}"
 
     if not result:
+        order_query_failed_total.inc()
         return f"No items found for order {order_id}."
 
     response = f"Items in order {order_id}:\n"
@@ -169,17 +182,23 @@ def get_order_item_price(order_id: str, product_id: str) -> str:
     Returns:
         Formatted string with historical price per unit.
     """
+    order_query_total.inc()
     db = get_database()
-    result = db._execute(
-        f"""
-        SELECT price_per_unit, quantity
-        FROM order_items
-        WHERE order_id = '{order_id}' AND product_id = '{product_id}'
-        """
-    )
-    result = extract_values(result)
+    try:
+        result = db._execute(
+            f"""
+            SELECT price_per_unit, quantity
+            FROM order_items
+            WHERE order_id = '{order_id}' AND product_id = '{product_id}'
+            """
+        )
+        result = extract_values(result)
+    except Exception as e:
+        order_query_failed_total.inc()
+        return f"Error querying price for {product_id} in {order_id}: {e}"
 
     if not result:
+        order_query_failed_total.inc()
         return f"Item {product_id} not found in order {order_id}."
 
     price, quantity = result[0]
@@ -200,18 +219,24 @@ def get_customer_orders(customer_id: str) -> str:
         Formatted list of recent orders with order ID, date, and status.
     """
 
+    order_query_total.inc()
     db = get_database()
-    result = db._execute(
-        f"""
-        SELECT order_id, order_date, status
-        FROM orders
-        WHERE customer_id = '{customer_id}'
-        ORDER BY order_date DESC
-    """
-    )
-    result = extract_values(result)
+    try:
+        result = db._execute(
+            f"""
+            SELECT order_id, order_date, status
+            FROM orders
+            WHERE customer_id = '{customer_id}'
+            ORDER BY order_date DESC
+        """
+        )
+        result = extract_values(result)
+    except Exception as e:
+        order_query_failed_total.inc()
+        return f"Error querying orders for customer {customer_id}: {e}"
 
     if not result:
+        order_query_failed_total.inc()
         return f"No orders found for customer {customer_id}."
 
     response = "Recent orders:\n"
