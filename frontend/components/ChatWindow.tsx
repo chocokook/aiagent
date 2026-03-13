@@ -5,30 +5,43 @@ import { useChat } from "@/hooks/useChat";
 import MessageBubble from "./MessageBubble";
 import ChatInput from "./ChatInput";
 import InterruptModal from "./InterruptModal";
+import FeedbackModal from "./FeedbackModal";
 
 const WELCOME: string =
   "Hi! I'm TechHub's AI support assistant. I can help you with:\n• Order status & history\n• Product information\n• Return & shipping policies\n\nHow can I help you today?";
 
 export default function ChatWindow() {
-  const { messages, loading, interrupt, sendMessage, resumeWithInput, stop, clearHistory } = useChat();
+  const {
+    messages,
+    loading,
+    interrupt,
+    showFeedback,
+    sendMessage,
+    resumeWithInput,
+    stop,
+    endConversation,
+    handleFeedbackSubmit,
+    handleFeedbackSkip,
+    clearHistory,
+  } = useChat();
   const bottomRef = useRef<HTMLDivElement>(null);
 
-  // Auto-scroll to latest message
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
   return (
     <>
-      {/* HITL modal — overlays chat when agent needs user input */}
       {interrupt && (
         <InterruptModal prompt={interrupt.prompt} onSubmit={resumeWithInput} />
       )}
 
+      {showFeedback && (
+        <FeedbackModal onSubmit={handleFeedbackSubmit} onSkip={handleFeedbackSkip} />
+      )}
+
       <div className="w-full max-w-2xl bg-white rounded-3xl shadow-lg border border-gray-100 flex flex-col overflow-hidden h-[72vh]">
-        {/* Messages */}
         <div className="flex-1 overflow-y-auto p-5 space-y-4">
-          {/* Static welcome message */}
           <div className="flex justify-start">
             <div className="flex items-start gap-2">
               <div className="w-8 h-8 rounded-full bg-brand-600 flex items-center justify-center text-white text-xs font-bold shrink-0 mt-0.5">
@@ -40,7 +53,6 @@ export default function ChatWindow() {
             </div>
           </div>
 
-          {/* Conversation history */}
           {messages.map((msg) => (
             <MessageBubble key={msg.id} message={msg} />
           ))}
@@ -48,10 +60,8 @@ export default function ChatWindow() {
           <div ref={bottomRef} />
         </div>
 
-        {/* Divider */}
         <div className="border-t border-gray-100" />
 
-        {/* Input */}
         <div className="p-4">
           <ChatInput
             loading={loading}
@@ -63,15 +73,26 @@ export default function ChatWindow() {
             <p className="text-xs text-gray-400">
               Powered by LangGraph · Press <kbd className="font-mono">Enter</kbd> to send
             </p>
-            {messages.length > 0 && (
-              <button
-                onClick={clearHistory}
-                className="text-xs text-gray-400 hover:text-gray-600 transition-colors"
-                title="Start a new conversation"
-              >
-                New conversation
-              </button>
-            )}
+            <div className="flex items-center gap-3">
+              {messages.length > 0 && !showFeedback && (
+                <button
+                  onClick={endConversation}
+                  className="text-xs text-red-400 hover:text-red-600 transition-colors font-medium"
+                  title="结束对话并评价"
+                >
+                  结束对话
+                </button>
+              )}
+              {messages.length > 0 && (
+                <button
+                  onClick={clearHistory}
+                  className="text-xs text-gray-400 hover:text-gray-600 transition-colors"
+                  title="Start a new conversation"
+                >
+                  New conversation
+                </button>
+              )}
+            </div>
           </div>
         </div>
       </div>

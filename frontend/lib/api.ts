@@ -61,6 +61,19 @@ export async function streamResume(
   await parseSSE(res, onEvent);
 }
 
+/** Submit end-of-conversation feedback. Fire-and-forget. */
+export async function submitFeedback(
+  sessionId: string,
+  resolved: boolean,
+  score: number
+): Promise<void> {
+  await fetch(`${API_BASE}/feedback`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ session_id: sessionId, resolved, score }),
+  });
+}
+
 /** Parse an SSE stream and dispatch StreamEvents. */
 async function parseSSE(
   res: Response,

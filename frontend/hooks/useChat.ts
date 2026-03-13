@@ -1,7 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { streamChat, streamResume } from "@/lib/api";
+import { streamChat, streamResume, submitFeedback } from "@/lib/api";
+
+const INACTIVITY_MS = 5 * 60 * 1000; // 5 minutes
 
 export type Role = "user" | "assistant";
 
@@ -18,6 +20,7 @@ export interface InterruptState {
 
 const STORAGE_SESSION_KEY = "techhub_session_id";
 const STORAGE_MESSAGES_KEY = "techhub_messages";
+const STORAGE_INTERRUPT_KEY = "techhub_interrupt";
 
 /** Read a value from localStorage safely (SSR-safe). */
 function readStorage<T>(key: string, fallback: T): T {
@@ -58,11 +61,21 @@ export function useChat() {
     if (stored.length > 0) setMessages(stored);
     const storedSession = readStorage<string | null>(STORAGE_SESSION_KEY, null);
     if (storedSession) setSessionId(storedSession);
+    const storedInterrupt = readStorage<InterruptState | null>(STORAGE_INTERRUPT_KEY, null);
+    if (storedInterrupt) setInterrupt(storedInterrupt);
   }, []);
 
   const [loading, setLoading] = useState(false);
   const [interrupt, setInterrupt] = useState<InterruptState | null>(null);
+  const [showFeedback, setShowFeedback] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
+  const inactivityRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const sessionIdRef = useRef<string | null>(null);
+
+  // Keep ref in sync so inactivity timer can read latest sessionId
+  useEffect(() => {
+    sessionIdRef.current = sessionId;
+  }, [sessionId]);
 
   // Persist sessionId whenever it changes.
   useEffect(() => {
@@ -71,12 +84,36 @@ export function useChat() {
     }
   }, [sessionId]);
 
+  // Persist interrupt state so it survives page refresh.
+  useEffect(() => {
+    if (interrupt) {
+      writeStorage(STORAGE_INTERRUPT_KEY, interrupt);
+    } else {
+      removeStorage(STORAGE_INTERRUPT_KEY);
+    }
+  }, [interrupt]);
+
   // Persist completed messages whenever they change.
-  // Only store non-streaming messages to avoid saving incomplete bubbles.
   useEffect(() => {
     const completed = messages.filter((m) => !m.streaming);
     writeStorage(STORAGE_MESSAGES_KEY, completed);
   }, [messages]);
+
+  /** Reset the 5-minute inactivity timer. Called after every message exchange. */
+  const resetInactivityTimer = useCallback(() => {
+    if (inactivityRef.current) clearTimeout(inactivityRef.current);
+    inactivityRef.current = setTimeout(() => {
+      // Only show if there's an active session with messages
+      if (sessionIdRef.current) setShowFeedback(true);
+    }, INACTIVITY_MS);
+  }, []);
+
+  // Clear inactivity timer on unmount
+  useEffect(() => {
+    return () => {
+      if (inactivityRef.current) clearTimeout(inactivityRef.current);
+    };
+  }, []);
 
   const appendToken = useCallback((id: string, token: string) => {
     setMessages((prev) =>
@@ -119,6 +156,7 @@ export function useChat() {
         } else if (event.type === "done") {
           finaliseMessage(assistantId);
           setLoading(false);
+          resetInactivityTimer();
         } else if (event.type === "error") {
           appendToken(assistantId, `\n\n⚠️ ${event.message}`);
           finaliseMessage(assistantId);
@@ -126,7 +164,7 @@ export function useChat() {
         }
       }, ctrl.signal);
     },
-    [loading, sessionId, appendToken, finaliseMessage]
+    [loading, sessionId, appendToken, finaliseMessage, resetInactivityTimer]
   );
 
   const resumeWithInput = useCallback(
@@ -157,6 +195,7 @@ export function useChat() {
         } else if (event.type === "done") {
           finaliseMessage(assistantId);
           setLoading(false);
+          resetInactivityTimer();
         } else if (event.type === "error") {
           appendToken(assistantId, `\n\n⚠️ ${event.message}`);
           finaliseMessage(assistantId);
@@ -164,7 +203,7 @@ export function useChat() {
         }
       }, ctrl.signal);
     },
-    [sessionId, loading, appendToken, finaliseMessage]
+    [sessionId, loading, appendToken, finaliseMessage, resetInactivityTimer]
   );
 
   const stop = useCallback(() => {
@@ -172,8 +211,34 @@ export function useChat() {
     setLoading(false);
   }, []);
 
-  /** Start a brand-new conversation, wiping localStorage history. */
-  const clearHistory = useCallback(() => {
+  /** User clicks "结束对话" — show feedback immediately. */
+  const endConversation = useCallback(() => {
+    if (inactivityRef.current) clearTimeout(inactivityRef.current);
+    setShowFeedback(true);
+  }, []);
+
+  /** Called when user submits feedback. */
+  const handleFeedbackSubmit = useCallback(
+    async (resolved: boolean, score: number) => {
+      if (sessionId) {
+        await submitFeedback(sessionId, resolved, score);
+      }
+      setShowFeedback(false);
+      // Clear history to start fresh
+      abortRef.current?.abort();
+      removeStorage(STORAGE_SESSION_KEY);
+      removeStorage(STORAGE_MESSAGES_KEY);
+      setMessages([]);
+      setSessionId(null);
+      setLoading(false);
+      setInterrupt(null);
+    },
+    [sessionId]
+  );
+
+  /** Called when user skips feedback. */
+  const handleFeedbackSkip = useCallback(() => {
+    setShowFeedback(false);
     abortRef.current?.abort();
     removeStorage(STORAGE_SESSION_KEY);
     removeStorage(STORAGE_MESSAGES_KEY);
@@ -183,5 +248,31 @@ export function useChat() {
     setInterrupt(null);
   }, []);
 
-  return { messages, sessionId, loading, interrupt, sendMessage, resumeWithInput, stop, clearHistory };
+  /** Start a brand-new conversation, wiping localStorage history. */
+  const clearHistory = useCallback(() => {
+    abortRef.current?.abort();
+    if (inactivityRef.current) clearTimeout(inactivityRef.current);
+    removeStorage(STORAGE_SESSION_KEY);
+    removeStorage(STORAGE_MESSAGES_KEY);
+    setMessages([]);
+    setSessionId(null);
+    setLoading(false);
+    setInterrupt(null);
+    setShowFeedback(false);
+  }, []);
+
+  return {
+    messages,
+    sessionId,
+    loading,
+    interrupt,
+    showFeedback,
+    sendMessage,
+    resumeWithInput,
+    stop,
+    endConversation,
+    handleFeedbackSubmit,
+    handleFeedbackSkip,
+    clearHistory,
+  };
 }
