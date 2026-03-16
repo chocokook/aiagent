@@ -1,0 +1,49 @@
+# Railway production Dockerfile — excludes HuggingFace/PyTorch deps (~2 GB)
+# Uses OpenAI embeddings instead (set EMBEDDING_PROVIDER=openai in Railway env vars)
+
+# ── Build stage ───────────────────────────────────────────────────────────────
+FROM python:3.13-slim AS builder
+
+WORKDIR /app
+
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
+
+# Install only backend-relevant deps — no torch, no sentence-transformers
+RUN uv venv /app/.venv
+ENV PATH="/app/.venv/bin:$PATH"
+
+RUN uv pip install \
+    "langchain>=0.3.0" \
+    "langchain-core>=0.3.0" \
+    "langchain-anthropic>=0.3.0" \
+    "langchain-openai>=0.2.0" \
+    "langchain-community>=0.3.0" \
+    "langchain-text-splitters>=0.3.0" \
+    "langgraph>=0.2.0" \
+    "langsmith>=0.2.0" \
+    "fastapi>=0.115.0" \
+    "uvicorn[standard]>=0.30.0" \
+    "redis>=5.0.0" \
+    "sse-starlette>=2.1.0" \
+    "pydantic>=2.0.0" \
+    "psycopg2-binary>=2.9.0" \
+    "prometheus-fastapi-instrumentator>=6.1.0" \
+    "prometheus-client>=0.20.0" \
+    "python-dotenv>=1.0.0"
+
+# ── Runtime stage ─────────────────────────────────────────────────────────────
+FROM python:3.13-slim
+
+WORKDIR /app
+
+COPY --from=builder /app/.venv /app/.venv
+COPY . .
+
+ENV PATH="/app/.venv/bin:$PATH" \
+    PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    EMBEDDING_PROVIDER=openai
+
+EXPOSE 8000
+
+CMD ["uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "8000"]
