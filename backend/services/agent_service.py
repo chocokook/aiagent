@@ -67,8 +67,10 @@ def _is_cacheable(message: str) -> bool:
 def _get_redis() -> Optional[redis_lib.Redis]:
     global _redis
     if _redis is None:
+        import os
         try:
-            client = redis_lib.Redis(host="redis", port=6379, decode_responses=True, socket_connect_timeout=1)
+            redis_url = os.getenv("REDIS_URL", "redis://localhost:6379")
+            client = redis_lib.from_url(redis_url, decode_responses=True, socket_connect_timeout=1)
             client.ping()
             _redis = client
             logger.info("Redis cache connected")
