@@ -7,4 +7,5 @@ sed "s|\${RAILWAY_API_HOST}|${API_HOST}|g" \
 exec /bin/prometheus \
     --config.file=/etc/prometheus/prometheus.yml \
     --storage.tsdb.retention.time=7d \
+    --web.listen-address=":${PORT:-9090}" \
     "$@"

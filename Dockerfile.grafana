@@ -1,5 +1,11 @@
 FROM grafana/grafana:latest
 
 COPY monitoring/grafana/provisioning /etc/grafana/provisioning
+COPY monitoring/grafana-entrypoint.sh /entrypoint.sh
+
+USER root
+RUN chmod +x /entrypoint.sh
 
 EXPOSE 3000
+
+ENTRYPOINT ["/entrypoint.sh"]
