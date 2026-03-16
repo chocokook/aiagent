@@ -25,7 +25,6 @@ from pathlib import Path
 
 from langchain_community.document_loaders import TextLoader
 from langchain_core.vectorstores import InMemoryVectorStore
-from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_openai import OpenAIEmbeddings
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
@@ -44,6 +43,7 @@ def get_embeddings(provider: str = "huggingface"):
     if provider == "openai":
         return OpenAIEmbeddings(model="text-embedding-3-small")
     else:
+        from langchain_huggingface import HuggingFaceEmbeddings
         return HuggingFaceEmbeddings(model_name="sentence-transformers/all-mpnet-base-v2")
 
 
