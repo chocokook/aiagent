@@ -8,7 +8,6 @@ Responsibilities:
 - Resume interrupted threads with user input
 """
 
-import hashlib
 import logging
 import re
 import time
@@ -41,7 +40,6 @@ _agent = None
 # Caches final answers for non-personal general questions (e.g. "return policy").
 # Cache key = MD5 of normalised message text. TTL = 1 hour.
 # ---------------------------------------------------------------------------
-_CACHE_TTL = 3600  # seconds
 _redis: Optional[redis_lib.Redis] = None
 
 # Matches personal pronouns — same logic as supervisor_hitl_agent._PERSONAL_RE
@@ -80,29 +78,20 @@ def _get_redis() -> Optional[redis_lib.Redis]:
     return _redis if _redis else None
 
 
-def _cache_key(message: str) -> str:
-    normalised = message.lower().strip()
-    return f"agent_response:{hashlib.md5(normalised.encode()).hexdigest()}"
-
-
 def _cache_get(message: str) -> Optional[str]:
     r = _get_redis()
     if r is None:
         return None
-    try:
-        return r.get(_cache_key(message))
-    except Exception:
-        return None
+    from backend.services.semantic_cache import semantic_cache_get
+    return semantic_cache_get(r, message)
 
 
 def _cache_set(message: str, response: str) -> None:
     r = _get_redis()
     if r is None:
         return
-    try:
-        r.setex(_cache_key(message), _CACHE_TTL, response)
-    except Exception:
-        pass
+    from backend.services.semantic_cache import semantic_cache_set
+    semantic_cache_set(r, message, response)
 
 
 def _get_agent():
