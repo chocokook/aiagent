@@ -8,6 +8,33 @@
 
 ---
 
+## 🚀 立即体验
+
+| 服务 | 地址 |
+|------|------|
+| 💬 聊天界面 | https://aiagent-self.vercel.app |
+| 🔌 API 文档 | https://aiagent-production.up.railway.app/docs |
+
+### 如何使用
+
+**1. 通用咨询（无需登录）**
+
+直接在聊天框里提问，例如：
+- `"MacBook Pro 有哪些 USB-C 接口？"`
+- `"你们的退货政策是什么？"`
+- `"推荐一款适合家用的显示器"`
+
+**2. 订单/账户查询（需要身份核验）**
+
+涉及订单或账户信息时，系统会暂停并要求验证邮箱：
+- `"我的订单到哪里了？"`
+- `"帮我查一下最近的订单"`
+
+> 系统会询问：**"请提供您的邮箱地址"**
+> 输入测试邮箱：`sarah.chen@gmail.com`（或 `marcus.johnson@yahoo.com`）即可完成验证并查询订单。
+
+---
+
 ## 系统架构
 
 ```
@@ -301,6 +328,44 @@ TechHub 合成电商数据集（已内置，无需下载）：
 - `Dockerfile.railway` — 轻量级生产镜像（排除 PyTorch/HuggingFace）
 - `railway.toml` — Railway 部署配置
 - `langgraph.json` — 定义 6 个 LangSmith 可部署图
+
+### Railway 必填环境变量
+
+| 变量 | 值 | 说明 |
+|------|----|------|
+| `OPENAI_API_KEY` | `sk-...` | OpenAI API Key |
+| `WORKSHOP_MODEL` | `openai:gpt-4o-mini` | 模型选择 |
+| `EMBEDDING_PROVIDER` | `openai` | 向量化提供商 |
+| `REDIS_URL` | `redis://:password@host:port` | 从 Redis 服务 Variables 复制 |
+| `LANGSMITH_TRACING` | `false` | 生产环境可关闭 |
+
+> ⚠️ **不要设置 `OPENAI_BASE_URL`**，该变量必须完全删除（不是清空）。
+
+### 部署监控（Prometheus + Grafana）
+
+在 Railway 项目中额外添加两个服务：
+
+**Prometheus 服务**
+1. Railway → New Service → GitHub Repo → 选择本仓库
+2. Settings → Build → Dockerfile Path 填写 `Dockerfile.prometheus`
+3. Variables 添加：
+   ```
+   RAILWAY_API_HOST=aiagent-production.up.railway.app
+   ```
+4. Settings → Networking → 暴露端口 `9090`，记下生成的域名（如 `prometheus-production.up.railway.app`）
+
+**Grafana 服务**
+1. Railway → New Service → GitHub Repo → 选择本仓库
+2. Settings → Build → Dockerfile Path 填写 `Dockerfile.grafana`
+3. Variables 添加：
+   ```
+   GF_SECURITY_ADMIN_PASSWORD=your_password
+   GF_DATASOURCE_PROMETHEUS_URL=http://prometheus.railway.internal:9090
+   ```
+4. Settings → Networking → 暴露端口 `3000`，获取公开域名
+5. 用该域名更新前端的 `NEXT_PUBLIC_GRAFANA_URL` 环境变量（Vercel）
+
+访问 Grafana 域名，账号 `admin` / 你设置的密码，即可查看实时监控看板。
 
 ---
 

@@ -1,0 +1,11 @@
+FROM prom/prometheus:latest
+
+COPY monitoring/prometheus.railway.yml /etc/prometheus/prometheus.template.yml
+COPY monitoring/prometheus-entrypoint.sh /entrypoint.sh
+
+USER root
+RUN chmod +x /entrypoint.sh
+
+EXPOSE 9090
+
+ENTRYPOINT ["/entrypoint.sh"]

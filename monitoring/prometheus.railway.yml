@@ -1,0 +1,10 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: techhub-api
+    scheme: https
+    static_configs:
+      - targets: ["${RAILWAY_API_HOST}"]
+    metrics_path: /metrics
