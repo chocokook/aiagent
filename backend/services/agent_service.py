@@ -273,6 +273,7 @@ async def stream_agent(
                     if interrupts:
                         loop.call_soon_threadsafe(queue.put_nowait, ("interrupt", str(interrupts[0].value)))
         except Exception as exc:
+            logger.error("stream_agent full traceback:", exc_info=True)
             loop.call_soon_threadsafe(queue.put_nowait, ("error", str(exc)))
         finally:
             loop.call_soon_threadsafe(queue.put_nowait, (_SENTINEL, None))
