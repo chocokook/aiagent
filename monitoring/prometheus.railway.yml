@@ -4,7 +4,7 @@ global:
 
 scrape_configs:
   - job_name: techhub-api
-    scheme: https
+    scheme: ${RAILWAY_API_SCHEME}
     static_configs:
       - targets: ["${RAILWAY_API_HOST}"]
     metrics_path: /metrics

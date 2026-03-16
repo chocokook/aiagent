@@ -1,7 +1,10 @@
 #!/bin/sh
-# Substitute RAILWAY_API_HOST env var into prometheus config at startup
+# Substitute env vars into prometheus config at startup
 API_HOST="${RAILWAY_API_HOST:-aiagent-production.up.railway.app}"
-sed "s|\${RAILWAY_API_HOST}|${API_HOST}|g" \
+API_SCHEME="${RAILWAY_API_SCHEME:-https}"
+sed \
+    -e "s|\${RAILWAY_API_HOST}|${API_HOST}|g" \
+    -e "s|\${RAILWAY_API_SCHEME}|${API_SCHEME}|g" \
     /etc/prometheus/prometheus.template.yml > /etc/prometheus/prometheus.yml
 
 exec /bin/prometheus \
