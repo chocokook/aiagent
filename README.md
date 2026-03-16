@@ -386,7 +386,7 @@ TechHub 合成电商数据集（已内置，无需下载）：
 3. Variables 添加：
    ```
    GF_SECURITY_ADMIN_PASSWORD=your_password
-   GF_DATASOURCE_PROMETHEUS_URL=http://prometheus.railway.internal:9090
+   GF_DATASOURCE_PROMETHEUS_URL=https://your-prometheus-domain.up.railway.app
    ```
 4. Settings → Networking → 暴露端口 `3000`，获取公开域名
 5. 用该域名更新前端的 `NEXT_PUBLIC_GRAFANA_URL` 环境变量（Vercel）
