@@ -4,6 +4,6 @@ datasources:
   - name: Prometheus
     type: prometheus
     access: proxy
-    url: ${GF_DATASOURCE_PROMETHEUS_URL:-http://prometheus:9090}
+    url: $GF_DATASOURCE_PROMETHEUS_URL
     isDefault: true
     editable: false
