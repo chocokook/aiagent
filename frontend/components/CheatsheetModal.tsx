@@ -1,18 +1,46 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 type Tab = "features" | "accounts";
 
 export default function CheatsheetModal() {
   const [open, setOpen] = useState(false);
   const [tab, setTab] = useState<Tab>("features");
+  const [showHint, setShowHint] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (localStorage.getItem("cheatsheet_hint_seen")) return;
+    // Small delay so the page settles first
+    const show = setTimeout(() => setShowHint(true), 800);
+    const hide = setTimeout(() => {
+      setShowHint(false);
+      localStorage.setItem("cheatsheet_hint_seen", "1");
+    }, 4500);
+    return () => { clearTimeout(show); clearTimeout(hide); };
+  }, []);
+
+  const handleOpen = () => {
+    setShowHint(false);
+    localStorage.setItem("cheatsheet_hint_seen", "1");
+    setOpen(true);
+  };
 
   return (
     <>
+      {/* First-visit tooltip */}
+      {showHint && (
+        <div className="fixed bottom-[4.5rem] right-6 z-40 flex items-center gap-2 bg-gray-900 text-white text-xs rounded-xl px-3 py-2 shadow-lg animate-fade-in whitespace-nowrap">
+          <span>👋 新来的？点击查看使用指南</span>
+          {/* Arrow pointing down-right */}
+          <span className="absolute -bottom-1.5 right-4 w-3 h-3 bg-gray-900 rotate-45" />
+        </div>
+      )}
+
       {/* Floating help button */}
       <button
-        onClick={() => setOpen(true)}
+        onClick={handleOpen}
         className="fixed bottom-6 right-6 w-10 h-10 rounded-full bg-brand-600 text-white shadow-lg hover:bg-brand-700 transition-colors flex items-center justify-center text-lg font-bold z-40"
         title="Quick Start Guide"
         aria-label="Open quick start guide"
