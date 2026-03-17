@@ -1,5 +1,5 @@
 import ChatWindow from "@/components/ChatWindow";
-import CheatsheetModal from "@/components/CheatsheetModal";
+import CheatsheetModal from "@/components/CheatsheetModalSimple";
 
 declare const process: { env: Record<string, string | undefined> };
 const GRAFANA_URL = process.env.NEXT_PUBLIC_GRAFANA_URL ?? null;
