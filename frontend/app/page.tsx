@@ -1,4 +1,5 @@
 import ChatWindow from "@/components/ChatWindow";
+import CheatsheetModal from "@/components/CheatsheetModal";
 
 declare const process: { env: Record<string, string | undefined> };
 const GRAFANA_URL = process.env.NEXT_PUBLIC_GRAFANA_URL ?? null;
@@ -39,6 +40,9 @@ export default function Home() {
 
       {/* Chat */}
       <ChatWindow />
+
+      {/* Floating cheatsheet */}
+      <CheatsheetModal />
     </main>
   );
 }

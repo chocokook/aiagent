@@ -121,7 +121,8 @@ class CustomerInfo(NamedTuple):
 # Matches personal pronouns that indicate the query is about a specific customer.
 # If none match, verification is definitely not needed — skip the LLM call.
 _PERSONAL_RE = re.compile(
-    r"\b(my|mine|i|i've|i'd|i'm|i'll|our|myself|me)\b",
+    r"\b(my|mine|i|i've|i'd|i'm|i'll|our|myself|me)\b"
+    r"|我的|我|我们|我自己",
     re.IGNORECASE,
 )
 
