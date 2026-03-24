@@ -12,8 +12,7 @@
 
 | 服务 | 地址 |
 |------|------|
-| 💬 聊天界面 | https://aiagent-wheat.vercel.app |
-| 🔌 API 文档 | https://aiagent-production.up.railway.app/docs |
+| 💬 聊天界面 | [https://aiagent-wheat.vercel.app](https://aiagent-git-main-chocokooks-projects.vercel.app) |
 
 ### 如何使用
 
