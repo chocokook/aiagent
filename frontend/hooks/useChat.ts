@@ -150,7 +150,9 @@ export function useChat() {
         if (event.type === "session") setSessionId(event.sessionId);
         else if (event.type === "token") appendToken(assistantId, event.content);
         else if (event.type === "interrupt") {
-          finaliseMessage(assistantId);
+          // Remove the empty streaming placeholder — no assistant reply is coming,
+          // the InterruptModal will collect the email instead.
+          setMessages((prev) => prev.filter((m) => m.id !== assistantId));
           setInterrupt({ prompt: event.prompt });
           setLoading(false);
         } else if (event.type === "done") {
