@@ -248,6 +248,7 @@ async def stream_agent(
 
     def _run_stream():
         try:
+            interrupt_detected = False
             for chunk in agent.stream(state_input, config=config, stream_mode="messages"):
                 if isinstance(chunk, tuple):
                     msg_chunk, metadata = chunk
@@ -262,7 +263,18 @@ async def stream_agent(
                 elif isinstance(chunk, dict) and "__interrupt__" in chunk:
                     interrupts = chunk["__interrupt__"]
                     if interrupts:
+                        interrupt_detected = True
                         loop.call_soon_threadsafe(queue.put_nowait, ("interrupt", str(interrupts[0].value)))
+
+            # Fallback: LangGraph 1.x stream_mode="messages" does not emit interrupt dicts
+            # inline. Check graph state after the loop to detect any pending interrupt.
+            if not interrupt_detected:
+                state = agent.get_state(config)
+                for task in state.tasks:
+                    if getattr(task, "interrupts", None):
+                        interrupt_detected = True
+                        loop.call_soon_threadsafe(queue.put_nowait, ("interrupt", str(task.interrupts[0].value)))
+                        break
         except Exception as exc:
             logger.error("stream_agent full traceback:", exc_info=True)
             loop.call_soon_threadsafe(queue.put_nowait, ("error", str(exc)))
@@ -354,6 +366,7 @@ async def stream_resume_agent(
 
     def _run_stream():
         try:
+            interrupt_detected = False
             for chunk in agent.stream(Command(resume=user_input), config=config, stream_mode="messages"):
                 if isinstance(chunk, tuple):
                     msg_chunk, metadata = chunk
@@ -368,7 +381,18 @@ async def stream_resume_agent(
                 elif isinstance(chunk, dict) and "__interrupt__" in chunk:
                     interrupts = chunk["__interrupt__"]
                     if interrupts:
+                        interrupt_detected = True
                         loop.call_soon_threadsafe(queue.put_nowait, ("interrupt", str(interrupts[0].value)))
+
+            # Fallback: LangGraph 1.x stream_mode="messages" does not emit interrupt dicts
+            # inline. Check graph state after the loop to detect any pending interrupt.
+            if not interrupt_detected:
+                state = agent.get_state(config)
+                for task in state.tasks:
+                    if getattr(task, "interrupts", None):
+                        interrupt_detected = True
+                        loop.call_soon_threadsafe(queue.put_nowait, ("interrupt", str(task.interrupts[0].value)))
+                        break
         except Exception as exc:
             loop.call_soon_threadsafe(queue.put_nowait, ("error", str(exc)))
         finally:
