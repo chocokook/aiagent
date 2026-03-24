@@ -11,7 +11,7 @@ from config import DEFAULT_MODEL, DEFAULT_DEPLOYMENT_URL
 # Simulation Parameters
 DEFAULT_CONVERSATIONS_PER_RUN = 7  # 5-10 range, default to middle
 MAX_TURNS_PER_CONVERSATION = 8     # Prevent runaway conversations
-SIMULATION_MODEL = DEFAULT_MODEL  # Use same model as rest of project
+SIMULATION_MODEL = "openai:gpt-4o-mini"  # Hardcode to avoid dotenv load order issue
 
 # Deployment Settings
 DEPLOYMENT_GRAPH_NAME = "supervisor_hitl_sql_agent"
