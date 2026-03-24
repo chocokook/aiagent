@@ -51,6 +51,7 @@ services:
   api:
     build: .
     restart: unless-stopped
+    command: uvicorn backend.main:app --host 0.0.0.0 --port 8000 --reload
     ports:
       - "8000:8000"
     env_file:
@@ -67,6 +68,13 @@ services:
     volumes:
       # Mount data directory so SQLite fallback and vectorstores are accessible
       - ./data:/app/data
+      # Mount source directories for hot-reload during development (no rebuild needed)
+      - ./agents:/app/agents
+      - ./backend:/app/backend
+      - ./tools:/app/tools
+      - ./evaluators:/app/evaluators
+      - ./deployments:/app/deployments
+      - ./config.py:/app/config.py
 
   # ── Next.js frontend ─────────────────────────────────────────────────────────
   frontend:
